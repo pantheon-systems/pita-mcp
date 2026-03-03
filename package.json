@@ -1,0 +1,23 @@
+{
+  "name": "pantheon-pita-mcp",
+  "version": "0.1.0",
+  "description": "Pantheon Intelligent Threat Analyzer - MCP server for vulnerability management",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js"
+  },
+  "keywords": ["mcp", "pantheon", "vulnerability", "security"],
+  "author": "Ernie Ambrose",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}
