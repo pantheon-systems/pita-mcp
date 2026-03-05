@@ -144,6 +144,54 @@ export interface RemediationPlan {
   }[];
 }
 
+// === Repo-Centric Remediation Types ===
+
+export interface RepoRemediationEntry {
+  repo: string;
+  ghasTickets: string[];
+  wizTickets: string[];
+  severity: string;
+  slaUrgency: string | null;
+  fixes: RepoFix[];
+  crossSourceNotes: string[];
+  ticketsJql: string;
+}
+
+export interface ThirdPartyImageEntry {
+  image: string;
+  registry: string;
+  wizTickets: string[];
+  severity: string;
+  clusters: string[];
+  fixes: RepoFix[];
+  action: string;
+  ticketsJql: string;
+}
+
+export interface UnattributedEntry {
+  ticketKey: string;
+  summary: string;
+  resource: string | null;
+  severity: string;
+  source: string;
+}
+
+export interface RepoFix {
+  packageName: string;
+  fixedVersion: string;
+  cve: string;
+  resolvesGhas: boolean;
+  resolvesWiz: boolean;
+  note: string;
+}
+
+export interface RepoCentricRemediationPlan {
+  squad: string;
+  pantheonRepos: RepoRemediationEntry[];
+  thirdPartyImages: ThirdPartyImageEntry[];
+  unattributed: UnattributedEntry[];
+}
+
 // === Risk Exception Types ===
 
 export interface RiskExceptionDraft {
