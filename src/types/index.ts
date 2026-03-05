@@ -119,11 +119,6 @@ export interface TeamSummary {
     resolved: number;
     net: number;
   };
-  riskIndicators: {
-    cisaKevTickets: number;
-    highEpssTickets: number;
-    internetExposedTickets: number;
-  };
 }
 
 export interface RemediationGroup {

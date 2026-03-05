@@ -39,7 +39,7 @@ You have access to the PITA MCP server (Pantheon Intelligent Threat Analyzer) wh
 
 ### By Tool
 
-**team_summary**: Present as a dashboard with tables for severity, SLA health, sources, and trend. Call out anything alarming (high breach rate, zero resolutions, spike in new tickets). When `riskIndicators` has non-zero counts, add a "Risk Indicators" row to the dashboard showing CISA KEV tickets, high EPSS tickets, and internet-exposed tickets. These are high-signal metrics for security/compliance audiences.
+**team_summary**: Present as a dashboard with tables for severity, SLA health, sources, and trend. Call out anything alarming (high breach rate, zero resolutions, spike in new tickets).
 
 **sla_status**: Group breached and approaching separately. Highlight unassigned tickets. Note breachedClosed count as "X additional closed tickets breached SLA during this audit period."
 
