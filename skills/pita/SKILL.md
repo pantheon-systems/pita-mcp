@@ -1,6 +1,6 @@
 ---
 name: pita
-description: Query and analyze Pantheon VUL project for vulnerability management. Use for SLA tracking, remediation plans, squad dashboards, trend analysis, and risk exception drafting.
+description: Query and analyze Pantheon VUL project for vulnerability management. Use for SLA tracking, remediation plans, squad dashboards, trend analysis, and blast radius.
 argument-hint: "[squad name, ticket key, or 'pde-wide']"
 ---
 
@@ -18,7 +18,7 @@ You have access to the PITA MCP server (Pantheon Intelligent Threat Analyzer) wh
 | "What should we fix first?" | `pita_remediation_plan` | squad, limit, scope |
 | "How widespread is this CVE?" | `pita_blast_radius` | cve, package, ticket_key, scope |
 | "Are we improving?" / "Show me the trend" | `pita_trend` | squad, period, scope |
-| "Draft a risk exception for VUL-1234" | `pita_draft_risk_exception` | ticket_key |
+| "Draft a risk exception for VUL-1234" | Use `/risk-exception VUL-1234` skill instead | — |
 | "Give me the PDE-wide view" | any tool, omit squad | scope |
 
 ### Parameters
@@ -50,8 +50,6 @@ You have access to the PITA MCP server (Pantheon Intelligent Threat Analyzer) wh
 **trend**: Simple table with weekly breakdown. Note the direction -- improving, stable, or worsening.
 
 **ticket_details**: Show ticket metadata, SLA status, parsed findings, and the relatedTickets section. For related tickets, clearly distinguish same_artifact (runtime view of same service) from shared_cve (independent occurrence). Include the note field which explains the relationship in plain language.
-
-**draft_risk_exception**: Present each section with its heading (Summary, Risk Level, Risk Description, Risk Exposure, Mitigation Measures, Target Plan). Include the disclaimer prominently.
 
 ### Markdown Reports
 

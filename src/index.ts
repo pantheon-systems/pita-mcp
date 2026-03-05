@@ -14,7 +14,7 @@ import { getSLAStatus } from './tools/sla-status.js';
 import { getTicketDetails } from './tools/ticket-details.js';
 import { getRemediationPlan } from './tools/remediation-plan.js';
 import { getTrend } from './tools/trend.js';
-import { draftRiskException } from './tools/risk-exception.js';
+
 import { getBlastRadius } from './tools/blast-radius.js';
 
 // Audit year filter (SOC2 audit year starting 12/1/2025)
@@ -135,20 +135,6 @@ const TOOLS = [
       },
     },
   },
-  {
-    name: 'pita_draft_risk_exception',
-    description: 'Generate an AI-drafted risk exception for a VUL ticket',
-    inputSchema: {
-      type: 'object' as const,
-      properties: {
-        ticket_key: {
-          type: 'string',
-          description: 'VUL ticket key (e.g., "VUL-3385")',
-        },
-      },
-      required: ['ticket_key'],
-    },
-  },
 ];
 
 class PITAServer {
@@ -204,9 +190,6 @@ class PITAServer {
 
           case 'pita_blast_radius':
             return await this.handleBlastRadius(args as { ticket_key?: string; cve?: string; package?: string; scope?: string });
-
-          case 'pita_draft_risk_exception':
-            return await this.handleRiskException(args as { ticket_key: string });
 
           default:
             return {
@@ -284,16 +267,6 @@ class PITAServer {
   private async handleBlastRadius(args: { ticket_key?: string; cve?: string; package?: string; scope?: string }) {
     const scope = args.scope || 'audit';
     const result = await getBlastRadius(this.jira, this.tts, args.ticket_key, args.cve, args.package, scope);
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify(result, null, 2),
-      }],
-    };
-  }
-
-  private async handleRiskException(args: { ticket_key: string }) {
-    const result = await draftRiskException(this.jira, args.ticket_key);
     return {
       content: [{
         type: 'text',
