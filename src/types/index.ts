@@ -119,6 +119,11 @@ export interface TeamSummary {
     resolved: number;
     net: number;
   };
+  riskIndicators: {
+    cisaKevTickets: number;
+    highEpssTickets: number;
+    internetExposedTickets: number;
+  };
 }
 
 export interface RemediationGroup {
@@ -155,6 +160,12 @@ export interface RepoRemediationEntry {
   fixes: RepoFix[];
   crossSourceNotes: string[];
   ticketsJql: string;
+  riskContext: {
+    hasCisaKev: boolean;
+    hasHighEpss: boolean;
+    hasCriticalCvss: boolean;
+    isInternetExposed: boolean;
+  } | null;
 }
 
 export interface ThirdPartyImageEntry {
@@ -190,4 +201,46 @@ export interface RepoCentricRemediationPlan {
   pantheonRepos: RepoRemediationEntry[];
   thirdPartyImages: ThirdPartyImageEntry[];
   unattributed: UnattributedEntry[];
+}
+
+// === Enrichment Types (CVE enrichment.md) ===
+
+export interface EnrichmentData {
+  resourceName: string;
+  totalCves: number;
+  cisaKevCount: number;
+  highEpssCount: number;
+  criticalCvssCount: number;
+  cves: CVEEnrichment[];
+}
+
+export interface CVEEnrichment {
+  cveId: string;
+  description: string;
+  cvssScore: number;
+  cvssSeverity: string;
+  epssProbability: number;
+  epssClassification: string;
+  inCisaKev: boolean;
+  attackVector: string;
+  attackComplexity: string;
+  privilegesRequired: string;
+  userInteraction: string;
+}
+
+// === Criticality Types (Wiz criticality CSV) ===
+
+export interface CriticalityScore {
+  totalScore: number;
+  criticalityRating: number;
+  hasInternetExposure: boolean;
+  hasWideInternetExposure: boolean;
+  hasCrossSubscriptionAccess: boolean;
+  hasCrossVnetAccess: boolean;
+  hasVpnAccess: boolean;
+  hasHighPrivileges: boolean;
+  hasAdminPrivileges: boolean;
+  hasSensitiveDataAccess: boolean;
+  hasHighK8sPrivileges: boolean;
+  hasAdminK8sPrivileges: boolean;
 }

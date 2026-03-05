@@ -3,7 +3,8 @@
 import type { JiraClient } from '../clients/jira.js';
 import { SUMMARY_FIELDS, TREND_FIELDS } from '../clients/jira.js';
 import type { TTSClient } from '../clients/tts.js';
-import type { TeamSummary, JiraIssue } from '../types/index.js';
+import type { TeamSummary } from '../types/index.js';
+import { buildFromSquad } from '../correlation/engine.js';
 
 function baseFilter(scope: string, filterId: string): string {
   return scope === 'audit' ? `filter = ${filterId}` : 'project = VUL';
@@ -19,17 +20,12 @@ export async function getTeamSummary(
   const base = baseFilter(scope, auditFilterId);
   const squadClause = squad ? ` AND "Squad" = "${squad}"` : '';
 
-  // Query open VUL tickets
-  const openJql = `${base}${squadClause} AND status NOT IN (Done, Closed)`;
+  // Use correlation engine for open tickets (includes enrichment/criticality parsing)
+  const { primaryTickets } = await buildFromSquad(jira, tts, squad, scope);
+
   // Query closed VUL tickets (for breached-but-closed SLA tracking)
   const closedJql = `${base}${squadClause} AND status IN (Done, Closed)`;
-
-  const [openResponse, closedResponse] = await Promise.all([
-    jira.searchIssues(openJql, Infinity, SUMMARY_FIELDS),
-    jira.searchIssues(closedJql, Infinity, SUMMARY_FIELDS),
-  ]);
-
-  const issues = openResponse.issues;
+  const closedResponse = await jira.searchIssues(closedJql, Infinity, SUMMARY_FIELDS);
 
   // Count by severity
   const bySeverity: Record<string, number> = {
@@ -40,8 +36,8 @@ export async function getTeamSummary(
     unprioritized: 0,
   };
 
-  for (const issue of issues) {
-    const severity = issue.fields.customfield_12500?.value?.toLowerCase() || 'unprioritized';
+  for (const ticket of primaryTickets) {
+    const severity = ticket.severity.toLowerCase() || 'unprioritized';
     if (severity in bySeverity) {
       bySeverity[severity]++;
     } else {
@@ -51,27 +47,22 @@ export async function getTeamSummary(
 
   // Count by source
   const sources = { ghas: 0, wiz: 0 };
-  for (const issue of issues) {
-    const summary = issue.fields.summary.toLowerCase();
-    if (summary.includes('ghas') || summary.includes('dependabot')) {
+  for (const ticket of primaryTickets) {
+    if (ticket.source === 'ghas') {
       sources.ghas++;
-    } else if (summary.includes('wiz')) {
+    } else if (ticket.source === 'wiz' || ticket.source === 'wiz-issue') {
       sources.wiz++;
     }
   }
 
-  // Get SLA status for open tickets
-  const openKeys = issues.map(i => i.key);
-  const openSlaResults = await tts.getIssueSLABatch(openKeys, 15);
-
+  // SLA health from enriched tickets (already have SLA from correlation engine)
   const slaHealth = { breached: 0, breachedClosed: 0, approaching: 0, within: 0 };
-  for (const [_key, slaResponse] of openSlaResults) {
-    const status = tts.parseSLAStatus(slaResponse);
-    if (status.status === 'breached') {
+  for (const ticket of primaryTickets) {
+    if (ticket.sla?.status === 'breached') {
       slaHealth.breached++;
-    } else if (status.status === 'approaching') {
+    } else if (ticket.sla?.status === 'approaching') {
       slaHealth.approaching++;
-    } else if (status.status === 'within') {
+    } else if (ticket.sla?.status === 'within') {
       slaHealth.within++;
     }
   }
@@ -84,6 +75,21 @@ export async function getTeamSummary(
     const status = tts.parseSLAStatus(slaResponse);
     if (status.status === 'breached') {
       slaHealth.breachedClosed++;
+    }
+  }
+
+  // Aggregate enrichment counts from parsed attachments
+  let cisaKevTickets = 0;
+  let highEpssTickets = 0;
+  let internetExposedTickets = 0;
+
+  for (const ticket of primaryTickets) {
+    if (ticket.enrichment) {
+      if (ticket.enrichment.cisaKevCount > 0) cisaKevTickets++;
+      if (ticket.enrichment.highEpssCount > 0) highEpssTickets++;
+    }
+    if (ticket.criticality) {
+      if (ticket.criticality.hasInternetExposure) internetExposedTickets++;
     }
   }
 
@@ -110,10 +116,15 @@ export async function getTeamSummary(
 
   return {
     squad: squad || 'All PDE',
-    openCount: issues.length,
+    openCount: primaryTickets.length,
     bySeverity,
     slaHealth,
     sources,
     trend7d,
+    riskIndicators: {
+      cisaKevTickets,
+      highEpssTickets,
+      internetExposedTickets,
+    },
   };
 }

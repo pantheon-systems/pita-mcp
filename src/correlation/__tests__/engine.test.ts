@@ -16,7 +16,7 @@ describe('correlateFindings', () => {
         squad: 'PIE',
         severity: 'High',
         status: 'Open',
-        sla: null,
+        sla: null, enrichment: null, criticality: null,
         findings: [{ cve: 'CVE-2026-1229', packageName: 'github.com/cloudflare/circl', description: '', severity: 'high', affectedVersion: '1.6.1', fixedVersion: '1.6.3', locationPath: '', detectionMethod: 'GHAS', firstDetected: '', lastDetected: '' }],
       },
     ];
@@ -32,7 +32,7 @@ describe('correlateFindings', () => {
         squad: 'Delivery Engineering',
         severity: 'Low',
         status: 'Open',
-        sla: null,
+        sla: null, enrichment: null, criticality: null,
         findings: [{ cve: 'CVE-2026-1229', packageName: 'github.com/cloudflare/circl', description: '', severity: 'LOW', affectedVersion: '1.6.1', fixedVersion: '1.6.3', locationPath: '/manager', detectionMethod: 'LIBRARY', firstDetected: '', lastDetected: '' }],
       },
     ];
@@ -58,7 +58,7 @@ describe('correlateFindings', () => {
         squad: 'Edge Routing',
         severity: 'High',
         status: 'Open',
-        sla: null,
+        sla: null, enrichment: null, criticality: null,
         findings: [{ cve: 'CVE-2024-1019', packageName: 'ModSecurity', description: '', severity: 'high', affectedVersion: '3.0.9', fixedVersion: '3.0.12', locationPath: '', detectionMethod: 'GHAS', firstDetected: '', lastDetected: '' }],
       },
     ];
@@ -74,7 +74,7 @@ describe('correlateFindings', () => {
         squad: 'Edge Routing',
         severity: 'Critical',
         status: 'Open',
-        sla: null,
+        sla: null, enrichment: null, criticality: null,
         findings: [{ cve: 'CVE-2024-1019', packageName: 'ModSecurity', description: '', severity: 'high', affectedVersion: '3.0.9', fixedVersion: '3.0.12', locationPath: '/usr/local/modsecurity/lib/libmodsecurity.so', detectionMethod: 'DetectionMethodFilePath', firstDetected: '', lastDetected: '' }],
       },
     ];
@@ -90,7 +90,7 @@ describe('correlateFindings', () => {
       {
         key: 'VUL-100', summary: 'GHAS 2026-03-03 - foo', source: 'ghas',
         repo: 'foo', image: null, imageType: null, clusters: [],
-        squad: 'PIE', severity: 'High', status: 'Open', sla: null,
+        squad: 'PIE', severity: 'High', status: 'Open', sla: null, enrichment: null, criticality: null,
         findings: [{ cve: 'CVE-2026-1111', packageName: 'pkg-a', description: '', severity: 'high', affectedVersion: '1.0', fixedVersion: '2.0', locationPath: '', detectionMethod: 'GHAS', firstDetected: '', lastDetected: '' }],
       },
     ];
@@ -98,7 +98,7 @@ describe('correlateFindings', () => {
       {
         key: 'VUL-200', summary: 'Wiz 2026-03-03 - Container Image : bar@abc', source: 'wiz',
         repo: null, image: 'bar', imageType: 'pantheon-built', clusters: [],
-        squad: 'PIE', severity: 'High', status: 'Open', sla: null,
+        squad: 'PIE', severity: 'High', status: 'Open', sla: null, enrichment: null, criticality: null,
         findings: [{ cve: 'CVE-2026-9999', packageName: 'pkg-b', description: '', severity: 'high', affectedVersion: '1.0', fixedVersion: '2.0', locationPath: '', detectionMethod: 'LIBRARY', firstDetected: '', lastDetected: '' }],
       },
     ];
@@ -111,7 +111,7 @@ describe('correlateFindings', () => {
     const ticket: EnrichedTicket = {
       key: 'VUL-100', summary: 'GHAS 2026-03-03 - foo', source: 'ghas',
       repo: 'foo', image: null, imageType: null, clusters: [],
-      squad: 'PIE', severity: 'High', status: 'Open', sla: null,
+      squad: 'PIE', severity: 'High', status: 'Open', sla: null, enrichment: null, criticality: null,
       findings: [{ cve: 'CVE-2026-1111', packageName: 'pkg-a', description: '', severity: 'high', affectedVersion: '1.0', fixedVersion: '2.0', locationPath: '', detectionMethod: 'GHAS', firstDetected: '', lastDetected: '' }],
     };
 

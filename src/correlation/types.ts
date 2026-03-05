@@ -1,6 +1,6 @@
 // src/correlation/types.ts
 
-import type { VulnerabilityFinding, SLAStatus } from '../types/index.js';
+import type { VulnerabilityFinding, SLAStatus, EnrichmentData, CriticalityScore } from '../types/index.js';
 
 export type TicketSource = 'ghas' | 'wiz' | 'wiz-issue';
 export type ImageType = 'pantheon-built' | 'third-party';
@@ -19,6 +19,8 @@ export interface EnrichedTicket {
   status: string;
   sla: SLAStatus | null;
   findings: VulnerabilityFinding[];
+  enrichment: EnrichmentData | null;
+  criticality: CriticalityScore | null;
 }
 
 export interface CrossReference {
