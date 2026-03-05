@@ -144,54 +144,50 @@ export interface RemediationPlan {
   }[];
 }
 
-// === Risk Exception Types ===
+// === Repo-Centric Remediation Types ===
 
-export interface RiskExceptionDraft {
+export interface RepoRemediationEntry {
+  repo: string;
+  ghasTickets: string[];
+  wizTickets: string[];
+  severity: string;
+  slaUrgency: string | null;
+  fixes: RepoFix[];
+  crossSourceNotes: string[];
+  ticketsJql: string;
+}
+
+export interface ThirdPartyImageEntry {
+  image: string;
+  registry: string;
+  wizTickets: string[];
+  severity: string;
+  clusters: string[];
+  fixes: RepoFix[];
+  action: string;
+  ticketsJql: string;
+}
+
+export interface UnattributedEntry {
+  ticketKey: string;
   summary: string;
-  riskLevel: string;
-  riskDescription: string;
-  riskExposure: string;
-  mitigationMeasures: string;
-  targetPlan: string;
-  disclaimer: string;
+  resource: string | null;
+  severity: string;
+  source: string;
 }
 
-// === Enrichment Types ===
-
-export interface CVEEnrichment {
-  cveId: string;
-  description: string;
-  cvssScore: number;
-  cvssSeverity: string;
-  epssProbability: number;
-  epssClassification: string;
-  inCisaKev: boolean;
-  attackVector: string;
-  attackComplexity: string;
-  privilegesRequired: string;
-  userInteraction: string;
+export interface RepoFix {
+  packageName: string;
+  fixedVersion: string;
+  cve: string;
+  resolvesGhas: boolean;
+  resolvesWiz: boolean;
+  note: string;
 }
 
-export interface EnrichmentData {
-  resourceName: string;
-  totalCves: number;
-  cisaKevCount: number;
-  highEpssCount: number;
-  criticalCvssCount: number;
-  cves: CVEEnrichment[];
-}
-
-export interface CriticalityScore {
-  totalScore: number;
-  criticalityRating: number;
-  hasInternetExposure: boolean;
-  hasWideInternetExposure: boolean;
-  hasCrossSubscriptionAccess: boolean;
-  hasCrossVnetAccess: boolean;
-  hasVpnAccess: boolean;
-  hasHighPrivileges: boolean;
-  hasAdminPrivileges: boolean;
-  hasSensitiveDataAccess: boolean;
-  hasHighK8sPrivileges: boolean;
-  hasAdminK8sPrivileges: boolean;
+export interface RepoCentricRemediationPlan {
+  squad: string;
+  pantheonRepos: RepoRemediationEntry[];
+  thirdPartyImages: ThirdPartyImageEntry[];
+  unattributed: UnattributedEntry[];
 }

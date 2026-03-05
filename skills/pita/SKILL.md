@@ -1,6 +1,6 @@
 ---
 name: pita
-description: Query and analyze Pantheon VUL project for vulnerability management. Use for SLA tracking, remediation plans, squad dashboards, trend analysis, and risk exception drafting.
+description: Query and analyze Pantheon VUL project for vulnerability management. Use for SLA tracking, remediation plans, squad dashboards, trend analysis, and blast radius.
 argument-hint: "[squad name, ticket key, or 'pde-wide']"
 ---
 
@@ -14,10 +14,11 @@ You have access to the PITA MCP server (Pantheon Intelligent Threat Analyzer) wh
 |---|---|---|
 | "What's the vuln status for X?" | `pita_team_summary` | squad, scope |
 | "What's breaching SLA?" | `pita_sla_status` | squad, priority_filter, scope |
-| "Tell me about VUL-1234" | `pita_ticket_details` | ticket_key |
+| "Tell me about VUL-1234" | `pita_ticket_details` | ticket_key, scope |
 | "What should we fix first?" | `pita_remediation_plan` | squad, limit, scope |
+| "How widespread is this CVE?" | `pita_blast_radius` | cve, package, ticket_key, scope |
 | "Are we improving?" / "Show me the trend" | `pita_trend` | squad, period, scope |
-| "Draft a risk exception for VUL-1234" | `pita_draft_risk_exception` | ticket_key |
+| "Draft a risk exception for VUL-1234" | Use `/risk-exception VUL-1234` skill instead | — |
 | "Give me the PDE-wide view" | any tool, omit squad | scope |
 
 ### Parameters
@@ -42,13 +43,13 @@ You have access to the PITA MCP server (Pantheon Intelligent Threat Analyzer) wh
 
 **sla_status**: Group breached and approaching separately. Highlight unassigned tickets. Note breachedClosed count as "X additional closed tickets breached SLA during this audit period."
 
-**remediation_plan**: Table with Fix, Squad Tickets, PDE-Wide, Severity columns. Call out the top 1-2 actionable fixes vs. items with no upstream fix (risk exception candidates). When codex is available, annotate core platform packages.
+**remediation_plan**: Present three sections: Pantheon Repositories (grouped by repo with fixes and cross-source notes), Third-Party Images (with upgrade actions), and Unattributed (tickets that can't be mapped to a source repo). For each repo, show GHAS and Wiz ticket keys, fixes with cross-source resolution notes, and SLA urgency. Render ticket keys as Jira links. Call out repos with both GHAS and Wiz findings — these are the highest-value fixes because one PR resolves findings at both layers.
+
+**blast_radius**: Present the summary line prominently. Show GHAS and Wiz ticket tables separately. Highlight the cross-source correlation section — call out same_artifact relationships ("fixing and redeploying resolves both") vs shared_cve ("same vulnerability, independent fix required"). Show SLA impact at the bottom.
 
 **trend**: Simple table with weekly breakdown. Note the direction -- improving, stable, or worsening.
 
-**ticket_details**: Show ticket metadata, SLA status, and parsed findings in a clear layout.
-
-**draft_risk_exception**: Present each section with its heading (Summary, Risk Level, Risk Description, Risk Exposure, Mitigation Measures, Target Plan). Include the disclaimer prominently.
+**ticket_details**: Show ticket metadata, SLA status, parsed findings, and the relatedTickets section. For related tickets, clearly distinguish same_artifact (runtime view of same service) from shared_cve (independent occurrence). Include the note field which explains the relationship in plain language.
 
 ### Markdown Reports
 
@@ -125,12 +126,16 @@ Do not repeat this in subsequent messages.
 
 ## Common Workflows
 
+### "What's the blast radius of this CVE?"
+
+Run `pita_blast_radius` with the CVE or ticket key. Present the spread across repos, images, and clusters. Distinguish between tickets that share the vulnerability independently vs. tickets that are the same artifact scanned at different layers.
+
 ### "Give me the full analysis for {squad}"
 
 Run in sequence:
 1. `pita_team_summary` for the dashboard
 2. `pita_sla_status` for breached/approaching details
-3. `pita_remediation_plan` for prioritized fixes
+3. `pita_remediation_plan` for repo-centric fixes with cross-source correlation
 4. Present as a combined report
 
 ### "What's the most impactful fix across PDE?"

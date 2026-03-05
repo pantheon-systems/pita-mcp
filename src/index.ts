@@ -14,7 +14,8 @@ import { getSLAStatus } from './tools/sla-status.js';
 import { getTicketDetails } from './tools/ticket-details.js';
 import { getRemediationPlan } from './tools/remediation-plan.js';
 import { getTrend } from './tools/trend.js';
-import { draftRiskException } from './tools/risk-exception.js';
+
+import { getBlastRadius } from './tools/blast-radius.js';
 
 // Audit year filter (SOC2 audit year starting 12/1/2025)
 const AUDIT_FILTER_ID = '26914';
@@ -63,7 +64,7 @@ const TOOLS = [
   },
   {
     name: 'pita_ticket_details',
-    description: 'Get detailed information for a single VUL ticket including parsed findings',
+    description: 'Get detailed information for a single VUL ticket including parsed findings and cross-source related tickets',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -71,6 +72,7 @@ const TOOLS = [
           type: 'string',
           description: 'VUL ticket key (e.g., "VUL-3385")',
         },
+        ...SCOPE_PROPERTY,
       },
       required: ['ticket_key'],
     },
@@ -95,7 +97,7 @@ const TOOLS = [
   },
   {
     name: 'pita_remediation_plan',
-    description: 'Get prioritized remediation plan grouping tickets by shared CVE/package fixes. Omit squad for PDE-wide view.',
+    description: 'Get repo-centric remediation plan with cross-source correlation. Groups fixes by Pantheon repo, third-party images, and unattributed findings. Omit squad for PDE-wide view.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -112,17 +114,25 @@ const TOOLS = [
     },
   },
   {
-    name: 'pita_draft_risk_exception',
-    description: 'Generate an AI-drafted risk exception for a VUL ticket',
+    name: 'pita_blast_radius',
+    description: 'Show how widespread a CVE, package vulnerability, or ticket finding is across repos, images, and clusters. Entry point for understanding vulnerability spread.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         ticket_key: {
           type: 'string',
-          description: 'VUL ticket key (e.g., "VUL-3385")',
+          description: 'VUL ticket key to analyze (e.g., "VUL-3982"). Shows blast radius for all CVEs in this ticket.',
         },
+        cve: {
+          type: 'string',
+          description: 'CVE identifier (e.g., "CVE-2026-1229"). Shows all tickets with this CVE.',
+        },
+        package: {
+          type: 'string',
+          description: 'Package name (e.g., "github.com/cloudflare/circl"). Shows all tickets with this package.',
+        },
+        ...SCOPE_PROPERTY,
       },
-      required: ['ticket_key'],
     },
   },
 ];
@@ -170,7 +180,7 @@ class PITAServer {
             return await this.handleSLAStatus(args as { squad?: string; priority_filter?: string; scope?: string });
 
           case 'pita_ticket_details':
-            return await this.handleTicketDetails(args as { ticket_key: string });
+            return await this.handleTicketDetails(args as { ticket_key: string; scope?: string });
 
           case 'pita_trend':
             return await this.handleTrend(args as { squad?: string; period?: string; scope?: string });
@@ -178,8 +188,8 @@ class PITAServer {
           case 'pita_remediation_plan':
             return await this.handleRemediationPlan(args as { squad?: string; limit?: number; scope?: string });
 
-          case 'pita_draft_risk_exception':
-            return await this.handleRiskException(args as { ticket_key: string });
+          case 'pita_blast_radius':
+            return await this.handleBlastRadius(args as { ticket_key?: string; cve?: string; package?: string; scope?: string });
 
           default:
             return {
@@ -221,8 +231,9 @@ class PITAServer {
     };
   }
 
-  private async handleTicketDetails(args: { ticket_key: string }) {
-    const result = await getTicketDetails(this.jira, this.tts, args.ticket_key);
+  private async handleTicketDetails(args: { ticket_key: string; scope?: string }) {
+    const scope = args.scope || 'audit';
+    const result = await getTicketDetails(this.jira, this.tts, args.ticket_key, scope);
     return {
       content: [{
         type: 'text',
@@ -253,8 +264,9 @@ class PITAServer {
     };
   }
 
-  private async handleRiskException(args: { ticket_key: string }) {
-    const result = await draftRiskException(this.jira, args.ticket_key);
+  private async handleBlastRadius(args: { ticket_key?: string; cve?: string; package?: string; scope?: string }) {
+    const scope = args.scope || 'audit';
+    const result = await getBlastRadius(this.jira, this.tts, args.ticket_key, args.cve, args.package, scope);
     return {
       content: [{
         type: 'text',

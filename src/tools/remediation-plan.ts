@@ -2,11 +2,17 @@
 
 import type { JiraClient } from '../clients/jira.js';
 import type { TTSClient } from '../clients/tts.js';
-import type { RemediationPlan, RemediationGroup, VulnerabilityFinding } from '../types/index.js';
-import { parseWizCSV } from '../parsers/wiz-csv.js';
-import { parseGHASCSV } from '../parsers/ghas-csv.js';
-import { parseGHASDescription, extractRepoFromSummary } from '../parsers/ghas.js';
-import { groupByFix, type TicketFindings } from '../analysis/grouping.js';
+import type {
+  RepoCentricRemediationPlan,
+  RepoRemediationEntry,
+  ThirdPartyImageEntry,
+  UnattributedEntry,
+  RepoFix,
+} from '../types/index.js';
+import { buildFromSquad } from '../correlation/engine.js';
+import type { EnrichedTicket, CrossReference } from '../correlation/types.js';
+
+const SEVERITY_ORDER = ['critical', 'highest', 'high', 'medium', 'low', 'unknown'];
 
 export async function getRemediationPlan(
   jira: JiraClient,
@@ -14,126 +20,209 @@ export async function getRemediationPlan(
   squad?: string,
   limit = 10,
   scope = 'audit',
-  auditFilterId = '26914'
-): Promise<RemediationPlan> {
-  // Fetch all open VUL tickets
-  const base = scope === 'audit' ? `filter = ${auditFilterId}` : 'project = VUL';
-  const squadClause = squad ? ` AND "Squad" = "${squad}"` : '';
-  const jql = `${base}${squadClause} AND status NOT IN (Done, Closed)`;
-  const response = await jira.searchIssues(jql, Infinity);
-  const issues = response.issues;
+  _auditFilterId = '26914'
+): Promise<RepoCentricRemediationPlan> {
+  const { primaryTickets, crossReferences } = await buildFromSquad(jira, tts, squad, scope);
 
-  // Parse findings from each ticket
-  const ticketFindings: TicketFindings[] = [];
+  // Build cross-reference lookup: ticketKey -> CrossReference[]
+  const xrefByTicket = new Map<string, CrossReference[]>();
+  for (const xref of crossReferences) {
+    if (!xrefByTicket.has(xref.primaryTicketKey)) {
+      xrefByTicket.set(xref.primaryTicketKey, []);
+    }
+    xrefByTicket.get(xref.primaryTicketKey)!.push(xref);
+  }
 
-  for (const issue of issues) {
-    const summary = issue.fields.summary;
-    const description = jira.extractTextFromADF(issue.fields.description);
-    const isGHAS = summary.toLowerCase().includes('ghas');
+  // Separate tickets into categories
+  const pantheonRepoMap = new Map<string, { tickets: EnrichedTicket[]; xrefs: CrossReference[] }>();
+  const thirdPartyMap = new Map<string, EnrichedTicket[]>();
+  const unattributed: UnattributedEntry[] = [];
 
-    let findings: VulnerabilityFinding[] = [];
-
-    // Try CSV attachments first (both Wiz and GHAS have them)
-    const csvAttachments = issue.fields.attachment.filter(
-      a => a.filename.endsWith('.csv') && !a.filename.includes('criticality')
-    );
-
-    for (const csvAttachment of csvAttachments) {
-      try {
-        const csvContent = await jira.getAttachmentContent(csvAttachment.content);
-        // GHAS CSVs have 'package_name' header, Wiz CSVs have 'detailedName'
-        const parsed = csvContent.includes('package_name')
-          ? parseGHASCSV(csvContent)
-          : parseWizCSV(csvContent);
-        findings.push(...parsed);
-      } catch (e) {
-        console.error(`Failed to parse CSV for ${issue.key}:`, e);
+  for (const ticket of primaryTickets) {
+    if (ticket.source === 'ghas' && ticket.repo) {
+      // GHAS ticket — group by repo
+      if (!pantheonRepoMap.has(ticket.repo)) {
+        pantheonRepoMap.set(ticket.repo, { tickets: [], xrefs: [] });
       }
-    }
-
-    // Fall back to description parsing for GHAS if no CSV findings
-    if (findings.length === 0 && isGHAS) {
-      findings = parseGHASDescription(description);
-    }
-
-    if (findings.length > 0) {
-      ticketFindings.push({
-        ticketKey: issue.key,
-        summary,
-        repo: extractRepoFromSummary(summary),
-        findings,
+      pantheonRepoMap.get(ticket.repo)!.tickets.push(ticket);
+      const xrefs = xrefByTicket.get(ticket.key) || [];
+      pantheonRepoMap.get(ticket.repo)!.xrefs.push(...xrefs);
+    } else if (ticket.source === 'wiz' && ticket.image && ticket.imageType === 'third-party') {
+      // Third-party Wiz image
+      if (!thirdPartyMap.has(ticket.image)) {
+        thirdPartyMap.set(ticket.image, []);
+      }
+      thirdPartyMap.get(ticket.image)!.push(ticket);
+    } else if (ticket.source === 'wiz' && ticket.image && ticket.imageType === 'pantheon-built') {
+      // Pantheon-built Wiz image — try to group with repo
+      // Check if any cross-reference links it to a GHAS repo
+      const xrefs = xrefByTicket.get(ticket.key) || [];
+      const sameArtifact = xrefs.find(x => x.relationship === 'same_artifact' && x.relatedRepo);
+      if (sameArtifact && sameArtifact.relatedRepo) {
+        if (!pantheonRepoMap.has(sameArtifact.relatedRepo)) {
+          pantheonRepoMap.set(sameArtifact.relatedRepo, { tickets: [], xrefs: [] });
+        }
+        pantheonRepoMap.get(sameArtifact.relatedRepo)!.tickets.push(ticket);
+      } else if (ticket.image) {
+        // Use image name as pseudo-repo
+        if (!pantheonRepoMap.has(ticket.image)) {
+          pantheonRepoMap.set(ticket.image, { tickets: [], xrefs: [] });
+        }
+        pantheonRepoMap.get(ticket.image)!.tickets.push(ticket);
+      } else {
+        unattributed.push({
+          ticketKey: ticket.key,
+          summary: ticket.summary,
+          resource: ticket.image,
+          severity: ticket.severity,
+          source: ticket.source,
+        });
+      }
+    } else if (ticket.source === 'wiz-issue') {
+      // Wiz Issue tickets — always unattributed (no CVE-level findings)
+      unattributed.push({
+        ticketKey: ticket.key,
+        summary: ticket.summary,
+        resource: ticket.image,
+        severity: ticket.severity,
+        source: 'wiz-issue',
+      });
+    } else {
+      unattributed.push({
+        ticketKey: ticket.key,
+        summary: ticket.summary,
+        resource: ticket.image || ticket.repo,
+        severity: ticket.severity,
+        source: ticket.source,
       });
     }
   }
 
-  // Group findings by fix
-  const allGroups = groupByFix(ticketFindings);
+  // Build Pantheon repo entries
+  const pantheonRepos: RepoRemediationEntry[] = [];
+  for (const [repo, data] of pantheonRepoMap) {
+    const ghasTickets = data.tickets.filter(t => t.source === 'ghas').map(t => t.key);
+    const wizTickets = data.tickets.filter(t => t.source === 'wiz').map(t => t.key);
+    const allTicketKeys = data.tickets.map(t => t.key);
 
-  // Separate high-leverage (multiple tickets) from standalone
-  const highLeverageFixes = allGroups
-    .filter(g => g.ticketsResolved > 1)
-    .slice(0, limit);
+    // Build fixes from findings
+    const fixMap = new Map<string, RepoFix>();
+    for (const ticket of data.tickets) {
+      for (const finding of ticket.findings) {
+        if (!finding.fixedVersion) continue;
+        const fixKey = `${finding.packageName}@${finding.fixedVersion}`;
+        if (!fixMap.has(fixKey)) {
+          const hasWizMatch = data.xrefs.some(
+            x => x.sharedCVEs.includes(finding.cve) && x.relationship === 'same_artifact'
+          );
+          fixMap.set(fixKey, {
+            packageName: finding.packageName,
+            fixedVersion: finding.fixedVersion,
+            cve: finding.cve,
+            resolvesGhas: ticket.source === 'ghas',
+            resolvesWiz: ticket.source === 'wiz' || hasWizMatch,
+            note: hasWizMatch || ticket.source === 'wiz'
+              ? 'GHAS finding + Wiz runtime finding both resolved'
+              : 'GHAS finding resolved (no matching Wiz runtime finding)',
+          });
+        } else {
+          const fix = fixMap.get(fixKey)!;
+          if (ticket.source === 'ghas') fix.resolvesGhas = true;
+          if (ticket.source === 'wiz') fix.resolvesWiz = true;
+          if (fix.resolvesGhas && fix.resolvesWiz) {
+            fix.note = 'GHAS finding + Wiz runtime finding both resolved';
+          }
+        }
+      }
+    }
 
-  // For squad-specific queries, enrich top fixes with PDE-wide counts
-  if (squad && highLeverageFixes.length > 0) {
-    await enrichWithPDEWideCounts(jira, highLeverageFixes, squad, base);
+    // Determine severity and SLA
+    const highestSeverity = data.tickets
+      .map(t => t.severity)
+      .sort((a, b) => SEVERITY_ORDER.indexOf(a.toLowerCase()) - SEVERITY_ORDER.indexOf(b.toLowerCase()))[0] || 'Unknown';
+
+    const deadlines = data.tickets
+      .filter(t => t.sla?.deadline)
+      .sort((a, b) => (a.sla!.deadline! < b.sla!.deadline! ? -1 : 1));
+    const slaUrgency = deadlines[0]?.sla?.deadline ?? null;
+
+    const crossSourceNotes: string[] = [];
+    for (const xref of data.xrefs) {
+      if (xref.relationship === 'same_artifact') {
+        crossSourceNotes.push(
+          `${xref.relatedTicketKey} (Wiz) is the runtime view of this repo — fixing and redeploying resolves both`
+        );
+      } else if (xref.relationship === 'shared_cve') {
+        crossSourceNotes.push(
+          `${xref.relatedTicketKey} (${xref.relatedSquad || 'unassigned'}) has the same CVE independently`
+        );
+      }
+    }
+
+    pantheonRepos.push({
+      repo,
+      ghasTickets,
+      wizTickets,
+      severity: highestSeverity,
+      slaUrgency,
+      fixes: Array.from(fixMap.values()),
+      crossSourceNotes,
+      ticketsJql: `key in (${allTicketKeys.join(', ')})`,
+    });
   }
 
-  const standaloneFixes = allGroups
-    .filter(g => g.ticketsResolved === 1)
-    .slice(0, 10)
-    .map(g => {
-      // Extract first key from JQL "key in (VUL-1234)"
-      const keyMatch = g.ticketsJql.match(/VUL-\d+/);
-      const key = keyMatch ? keyMatch[0] : '';
-      return {
-        key,
-        summary: ticketFindings.find(t => t.ticketKey === key)?.summary || '',
-        fix: g.fix,
-      };
+  // Sort repos by severity then SLA urgency
+  pantheonRepos.sort((a, b) => {
+    const sevDiff = SEVERITY_ORDER.indexOf(a.severity.toLowerCase()) - SEVERITY_ORDER.indexOf(b.severity.toLowerCase());
+    if (sevDiff !== 0) return sevDiff;
+    if (a.slaUrgency && b.slaUrgency) return a.slaUrgency < b.slaUrgency ? -1 : 1;
+    return a.slaUrgency ? -1 : 1;
+  });
+
+  // Build third-party image entries
+  const thirdPartyImages: ThirdPartyImageEntry[] = [];
+  for (const [image, tickets] of thirdPartyMap) {
+    const allClusters = [...new Set(tickets.flatMap(t => t.clusters))];
+    const allKeys = tickets.map(t => t.key);
+
+    const fixMap = new Map<string, RepoFix>();
+    for (const ticket of tickets) {
+      for (const finding of ticket.findings) {
+        if (!finding.fixedVersion) continue;
+        const fixKey = `${finding.packageName}@${finding.fixedVersion}`;
+        if (!fixMap.has(fixKey)) {
+          fixMap.set(fixKey, {
+            packageName: finding.packageName,
+            fixedVersion: finding.fixedVersion,
+            cve: finding.cve,
+            resolvesGhas: false,
+            resolvesWiz: true,
+            note: '',
+          });
+        }
+      }
+    }
+
+    const highestSeverity = tickets
+      .map(t => t.severity)
+      .sort((a, b) => SEVERITY_ORDER.indexOf(a.toLowerCase()) - SEVERITY_ORDER.indexOf(b.toLowerCase()))[0] || 'Unknown';
+
+    thirdPartyImages.push({
+      image,
+      registry: tickets[0]?.summary || '',
+      wizTickets: allKeys,
+      severity: highestSeverity,
+      clusters: allClusters,
+      fixes: Array.from(fixMap.values()),
+      action: 'Upgrade Helm chart or pin newer image version',
+      ticketsJql: `key in (${allKeys.join(', ')})`,
     });
+  }
 
   return {
     squad: squad || 'All PDE',
-    highLeverageFixes,
-    standaloneFixes,
+    pantheonRepos: pantheonRepos.slice(0, limit),
+    thirdPartyImages,
+    unattributed,
   };
-}
-
-/**
- * For each high-leverage fix, search PDE-wide for tickets containing the same
- * CVE to show cross-org impact. Only searches by CVE since that's the most
- * reliable cross-ticket identifier.
- */
-async function enrichWithPDEWideCounts(
-  jira: JiraClient,
-  fixes: RemediationGroup[],
-  squad: string,
-  base: string
-): Promise<void> {
-  // Collect unique CVEs from top fixes
-  const cvesToSearch = new Map<string, RemediationGroup[]>();
-  for (const fix of fixes) {
-    if (fix.cve && fix.cve.startsWith('CVE-')) {
-      if (!cvesToSearch.has(fix.cve)) {
-        cvesToSearch.set(fix.cve, []);
-      }
-      cvesToSearch.get(fix.cve)!.push(fix);
-    }
-  }
-
-  // Search PDE-wide for each CVE (excluding the squad's own tickets)
-  for (const [cve, relatedFixes] of cvesToSearch) {
-    try {
-      const pdeJql = `${base} AND "Squad" != "${squad}" AND status NOT IN (Done, Closed) AND text ~ "${cve}"`;
-      const pdeResponse = await jira.searchIssues(pdeJql, Infinity, ['summary']);
-
-      for (const fix of relatedFixes) {
-        fix.pdeWideTickets = pdeResponse.issues.length;
-        fix.pdeWideJql = pdeJql;
-      }
-    } catch (e) {
-      console.error(`Failed PDE-wide lookup for ${cve}:`, e);
-    }
-  }
 }

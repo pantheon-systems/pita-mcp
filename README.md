@@ -57,7 +57,7 @@ All squad-based tools accept an optional `squad` parameter. Omit it for a PDE-wi
 | `pita_ticket_details` | Single VUL ticket with parsed findings from CSV attachments, SLA status, source detection |
 | `pita_remediation_plan` | Groups vulnerabilities by shared fix, ranked by impact. Shows squad + PDE-wide ticket counts with JQL links |
 | `pita_trend` | New vs resolved over configurable `period` (e.g. "7d", "30d"), broken down by week |
-| `pita_draft_risk_exception` | Template-based risk exception draft using ticket data, enrichment, and criticality attachments |
+| `pita_blast_radius` | Cross-source spread analysis for a CVE, package, or ticket across repos, images, and clusters |
 
 ## Usage
 
@@ -67,8 +67,10 @@ With the `/pita` skill installed, just ask naturally:
 /pita give me the full analysis for Data Platform
 /pita what's breaching SLA for Workspace Management?
 /pita what's the most impactful fix across PDE?
-/pita draft a risk exception for VUL-1950
+/pita what's the blast radius of CVE-2026-1229?
 ```
+
+> **Risk Exceptions:** Use the `/risk-exception` skill from [pantheon-skills](https://github.com/pantheon-systems/pantheon-skills) to draft risk exceptions. It integrates with PITA MCP tools for enrichment when available.
 
 Without the skill, call tools directly:
 
@@ -108,9 +110,7 @@ src/
 ├── parsers/
 │   ├── wiz-csv.ts            # Wiz CSV (handles multi-line quoted fields)
 │   ├── ghas-csv.ts           # GHAS/Dependabot CSV
-│   ├── ghas.ts               # GHAS description fallback parser
-│   ├── enrichment.ts         # Enrichment.md (CVSS, EPSS, KEV)
-│   └── criticality.ts        # Criticality score CSV
+│   └── ghas.ts               # GHAS description fallback parser
 ├── analysis/
 │   └── grouping.ts           # Group findings by fix, rank by impact
 ├── tools/
@@ -119,7 +119,7 @@ src/
 │   ├── ticket-details.ts     # Single ticket with parsed findings
 │   ├── remediation-plan.ts   # Grouped fixes with PDE-wide enrichment
 │   ├── trend.ts              # Weekly new vs resolved
-│   └── risk-exception.ts     # Risk exception draft generator
+│   └── blast-radius.ts       # Cross-source vulnerability spread analysis
 ├── types/
 │   └── index.ts              # Shared TypeScript interfaces
 └── skills/
