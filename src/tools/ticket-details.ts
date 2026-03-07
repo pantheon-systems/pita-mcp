@@ -2,7 +2,7 @@
 
 import type { JiraClient } from '../clients/jira.js';
 import type { TTSClient } from '../clients/tts.js';
-import type { VulTicket, VulnerabilityFinding } from '../types/index.js';
+import type { VulTicket, VulnerabilityFinding, EnrichmentData, CriticalityScore } from '../types/index.js';
 import type { CrossReference } from '../correlation/types.js';
 import { buildFromTicket } from '../correlation/engine.js';
 import { extractRepo, extractImage } from '../correlation/extractors.js';
@@ -10,6 +10,8 @@ import { extractRepo, extractImage } from '../correlation/extractors.js';
 export interface EnhancedVulTicket extends VulTicket {
   repo: string | null;
   relatedTickets: RelatedTicketEntry[];
+  enrichment: EnrichmentData | null;
+  criticality: CriticalityScore | null;
 }
 
 export interface RelatedTicketEntry {
@@ -64,5 +66,7 @@ export async function getTicketDetails(
     findings: ticket.findings,
     repo: ticket.repo,
     relatedTickets,
+    enrichment: ticket.enrichment,
+    criticality: ticket.criticality,
   };
 }

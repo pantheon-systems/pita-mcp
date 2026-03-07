@@ -14,6 +14,17 @@ import type { EnrichedTicket, CrossReference } from '../correlation/types.js';
 
 const SEVERITY_ORDER = ['critical', 'highest', 'high', 'medium', 'low', 'unknown'];
 
+/** Score risk context for sorting: KEV and internet-exposed rank highest */
+function riskScore(ctx: { hasCisaKev: boolean; hasHighEpss: boolean; hasCriticalCvss: boolean; isInternetExposed: boolean } | null): number {
+  if (!ctx) return 0;
+  let score = 0;
+  if (ctx.hasCisaKev) score += 4;
+  if (ctx.isInternetExposed) score += 3;
+  if (ctx.hasCriticalCvss) score += 2;
+  if (ctx.hasHighEpss) score += 1;
+  return score;
+}
+
 export async function getRemediationPlan(
   jira: JiraClient,
   tts: TTSClient,
@@ -159,6 +170,18 @@ export async function getRemediationPlan(
       }
     }
 
+    // Aggregate risk context from enrichment/criticality data
+    let riskContext = null;
+    const hasEnrichmentData = data.tickets.some(t => t.enrichment || t.criticality);
+    if (hasEnrichmentData) {
+      riskContext = {
+        hasCisaKev: data.tickets.some(t => t.enrichment && t.enrichment.cisaKevCount > 0),
+        hasHighEpss: data.tickets.some(t => t.enrichment && t.enrichment.highEpssCount > 0),
+        hasCriticalCvss: data.tickets.some(t => t.enrichment && t.enrichment.criticalCvssCount > 0),
+        isInternetExposed: data.tickets.some(t => t.criticality?.hasInternetExposure),
+      };
+    }
+
     pantheonRepos.push({
       repo,
       ghasTickets,
@@ -168,11 +191,17 @@ export async function getRemediationPlan(
       fixes: Array.from(fixMap.values()),
       crossSourceNotes,
       ticketsJql: `key in (${allTicketKeys.join(', ')})`,
+      riskContext,
     });
   }
 
-  // Sort repos by severity then SLA urgency
+  // Sort repos by risk indicators, then severity, then SLA urgency
+  // KEV and internet-exposed findings rank highest
   pantheonRepos.sort((a, b) => {
+    const aRiskScore = riskScore(a.riskContext);
+    const bRiskScore = riskScore(b.riskContext);
+    if (aRiskScore !== bRiskScore) return bRiskScore - aRiskScore;
+
     const sevDiff = SEVERITY_ORDER.indexOf(a.severity.toLowerCase()) - SEVERITY_ORDER.indexOf(b.severity.toLowerCase());
     if (sevDiff !== 0) return sevDiff;
     if (a.slaUrgency && b.slaUrgency) return a.slaUrgency < b.slaUrgency ? -1 : 1;

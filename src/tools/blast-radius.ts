@@ -16,6 +16,12 @@ export interface BlastRadiusResult {
     mostUrgentDeadline: string | null;
     breachedCount: number;
   };
+  enrichmentSummary: {
+    cisaKevCount: number;
+    criticalCvssCount: number;
+    highEpssCount: number;
+    internetExposedCount: number;
+  } | null;
 }
 
 interface BlastRadiusEntry {
@@ -104,6 +110,18 @@ export async function getBlastRadius(
 
   const breachedCount = tickets.filter(t => t.sla?.status === 'breached').length;
 
+  // Aggregate enrichment data across all affected tickets
+  let enrichmentSummary = null;
+  const hasEnrichment = tickets.some(t => t.enrichment || t.criticality);
+  if (hasEnrichment) {
+    enrichmentSummary = {
+      cisaKevCount: tickets.filter(t => t.enrichment && t.enrichment.cisaKevCount > 0).length,
+      criticalCvssCount: tickets.filter(t => t.enrichment && t.enrichment.criticalCvssCount > 0).length,
+      highEpssCount: tickets.filter(t => t.enrichment && t.enrichment.highEpssCount > 0).length,
+      internetExposedCount: tickets.filter(t => t.criticality?.hasInternetExposure).length,
+    };
+  }
+
   return {
     query: { cve, package: packageName, ticket_key: ticketKey },
     summary,
@@ -111,5 +129,6 @@ export async function getBlastRadius(
     wizTickets,
     crossSourceCorrelation: crossRefs,
     slaImpact: { highestSeverity, mostUrgentDeadline, breachedCount },
+    enrichmentSummary,
   };
 }

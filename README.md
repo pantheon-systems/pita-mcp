@@ -94,8 +94,8 @@ Use pita_remediation_plan with no squad for PDE-wide
 | Jira VUL Project | Tickets, squad, severity, status, attachments | REST API v3 |
 | Wiz CSV Attachments | CVE, package, version, fix, severity, dates | Jira attachment API |
 | GHAS CSV Attachments | Package, patched version, vulnerable range, GitHub links | Jira attachment API |
-| Enrichment.md | CVSS scores, EPSS probability, CISA KEV status | Jira attachment API |
-| Criticality CSV | Internet exposure, privilege levels, sensitive data access | Jira attachment API |
+| Enrichment.md Attachments | Per-CVE CVSS scores, EPSS probability, CISA KEV status, attack vectors | Jira attachment API |
+| Criticality CSV Attachments | Internet exposure, privilege levels, K8s access, criticality scores | Jira attachment API |
 | TTS API | SLA status, deadline, days overdue/remaining | REST API |
 
 ## Design Decisions
@@ -118,14 +118,21 @@ src/
 ├── parsers/
 │   ├── wiz-csv.ts            # Wiz CSV (handles multi-line quoted fields)
 │   ├── ghas-csv.ts           # GHAS/Dependabot CSV
-│   └── ghas.ts               # GHAS description fallback parser
+│   ├── ghas.ts               # GHAS description fallback parser
+│   ├── enrichment.ts         # CVE enrichment.md (CVSS, EPSS, KEV, attack vectors)
+│   └── criticality.ts        # Wiz criticality CSV (exposure, privileges, scores)
+├── correlation/
+│   ├── engine.ts             # Cross-source correlation with tiered fetching
+│   ├── extractors.ts         # Repo, image, cluster, and source classification
+│   ├── types.ts              # Correlation interfaces
+│   └── __tests__/            # Correlation unit tests
 ├── analysis/
 │   └── grouping.ts           # Group findings by fix, rank by impact
 ├── tools/
 │   ├── team-summary.ts       # Dashboard with severity, SLA, sources, trend
 │   ├── sla-status.ts         # Breached (open + closed) and approaching
 │   ├── ticket-details.ts     # Single ticket with parsed findings
-│   ├── remediation-plan.ts   # Grouped fixes with PDE-wide enrichment
+│   ├── remediation-plan.ts   # Repo-centric fixes with cross-source correlation
 │   ├── trend.ts              # Weekly new vs resolved
 │   └── blast-radius.ts       # Cross-source vulnerability spread analysis
 ├── types/

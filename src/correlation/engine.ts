@@ -15,6 +15,8 @@ import {
 import { parseWizCSV } from '../parsers/wiz-csv.js';
 import { parseGHASCSV } from '../parsers/ghas-csv.js';
 import { parseGHASDescription } from '../parsers/ghas.js';
+import { parseEnrichmentMd } from '../parsers/enrichment.js';
+import { parseCriticalityCSV } from '../parsers/criticality.js';
 import { SUMMARY_FIELDS } from '../clients/jira.js';
 
 const AUDIT_FILTER_ID = '26914';
@@ -208,7 +210,7 @@ async function enrichTickets(
     const description = jira.extractTextFromADF(issue.fields.description);
     const source = classifyTicketSource(summary);
 
-    // Parse findings from CSV attachments
+    // Parse findings from CSV attachments (exclude criticality CSVs — parsed separately)
     let findings: VulnerabilityFinding[] = [];
     const csvAttachments = issue.fields.attachment.filter(
       a => a.filename.endsWith('.csv') && !a.filename.includes('criticality')
@@ -229,6 +231,34 @@ async function enrichTickets(
     // Fall back to description parsing for GHAS
     if (findings.length === 0 && source === 'ghas') {
       findings = parseGHASDescription(description);
+    }
+
+    // Parse enrichment.md attachments
+    let enrichment = null;
+    const enrichmentAttachments = issue.fields.attachment.filter(
+      a => a.filename.endsWith('.md') && a.filename.toLowerCase().includes('enrichment')
+    );
+    if (enrichmentAttachments.length > 0) {
+      try {
+        const mdContent = await jira.getAttachmentContent(enrichmentAttachments[0].content);
+        enrichment = parseEnrichmentMd(mdContent);
+      } catch (e) {
+        console.error(`Failed to parse enrichment.md for ${issue.key}:`, e);
+      }
+    }
+
+    // Parse criticality CSV attachments
+    let criticality = null;
+    const criticalityAttachments = issue.fields.attachment.filter(
+      a => a.filename.endsWith('.csv') && a.filename.toLowerCase().includes('criticality')
+    );
+    if (criticalityAttachments.length > 0) {
+      try {
+        const csvContent = await jira.getAttachmentContent(criticalityAttachments[0].content);
+        criticality = parseCriticalityCSV(csvContent);
+      } catch (e) {
+        console.error(`Failed to parse criticality CSV for ${issue.key}:`, e);
+      }
     }
 
     // Extract mapping data
@@ -260,6 +290,8 @@ async function enrichTickets(
       status: issue.fields.status.name,
       sla,
       findings,
+      enrichment,
+      criticality,
     });
   }
 
@@ -314,6 +346,8 @@ async function enrichTicketsLight(
       status: issue.fields.status.name,
       sla: null,
       findings,
+      enrichment: null,
+      criticality: null,
     });
   }
 
