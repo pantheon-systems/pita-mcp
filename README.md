@@ -1,5 +1,13 @@
 # PITA - Pantheon Intelligent Threat Analyzer
 
+> **Deprecated.** This MCP server has been replaced by the `/pita` skill in [pantheon-skills](https://github.com/pantheon-systems/pantheon-skills). Install the plugin and use `/pita` instead — no MCP server required.
+>
+> ```
+> /plugin marketplace add pantheon-systems/pantheon-skills
+> ```
+
+---
+
 MCP server for vulnerability management at Pantheon. Gives Claude structured access to the VUL project, parses vulnerability findings from Wiz and GHAS attachments, and generates prioritized remediation plans with cross-org impact analysis.
 
 ## Setup
